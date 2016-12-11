@@ -1,0 +1,183 @@
+---
+output: html_document
+---
+#**Reproducible Research Week 2 Assignment**
+##Paschalis Lagias
+  
+###**Set options.**
+Set Global r code chunk options:
+```{r options, echo = TRUE}
+    library(knitr)
+    opts_chunk$set(echo = TRUE)
+```
+  
+###**Download and read the data.**
+  
+Check if a data folder exists in the working directory.  
+If not, create a folder, download the data zip file, save it and unzip it.  
+"AMD" stands for Activity Monitoring Data.  
+```{r download, echo=TRUE}
+  url <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
+  if(!file.exists("./AMD")){
+        dir.create("./AMD")
+        download.file(url, destfile = "./AMD/amd.zip")
+        unzip(zipfile = "./AMD/amd.zip", exdir = "./AMD")
+}
+```
+  
+  
+Print data folder contents to see the name of the unzipped data file.
+```{r data}
+    print(dir("./AMD"))
+```
+  
+  
+Read the data file and store it in a data frame:
+```{r readdata}
+    amd <- read.csv("./AMD/activity.csv", na.strings = "NA")
+```
+  
+###**Mean total number of steps taken per day.**  
+  
+Subset the data frame to remove missing values ("NAs").  
+Calculate a new data frame with the sums of steps per day.  
+```{r stepsperday}
+  tidy_amd <- subset(amd, !amd$steps == "NA")
+  StepsPerDay <- aggregate(tidy_amd[c("steps")], list(day = tidy_amd$date), sum)
+```
+  
+  
+Create histogram of the total number of steps taken per day.
+```{r histstepsperday}
+library(ggplot2)
+ggplot(data = StepsPerDay, aes(StepsPerDay$steps)) +
+  geom_histogram(col = "black", fill = "red") +
+  labs(title = "Total Number of Steps taken per Day", x = "Steps", y = "Count") + 
+  theme(panel.border = element_rect(colour = "black", fill = NA))
+```
+  
+    
+Calculate the mean and the median of the total   
+number of steps taken per day.
+```{r meanmedian}
+MeanStepsPerDay <- mean(StepsPerDay$steps)
+MedianStepsPerDay <- median(StepsPerDay$steps)
+```
+The *mean* number of steps taken per day is **`r MeanStepsPerDay`**.  
+The *median* number of steps taken per day is **`r MedianStepsPerDay`**.  
+
+###**Average daily activity pattern.**  
+  
+Calculate a new data frame with  
+the steps per interval averaged across all days.  
+```{r stepsperinterval}
+StepsPerInt <- aggregate(tidy_amd[c("steps")], list(int = tidy_amd$interval), mean)
+```
+
+
+Make a time series plot of the 5-minute interval  
+and the average number of steps taken.
+```{r plotstepsperinterval}
+ggplot(data = StepsPerInt, aes(int, steps)) +
+  geom_line(col = "red", lwd = 0.4) +
+  labs(title = "Average Number of Steps taken per Interval", x = "Interval", y = "Steps") + 
+  theme(panel.border = element_rect(colour = "black", fill = NA))
+```
+
+
+Find the interval with the maximum average number of steps.  
+```{r maximum}
+max <- subset(StepsPerInt, StepsPerInt$steps == max(StepsPerInt$steps))
+```
+Interval **`r max$int`** is the interval with the maximum  
+average number of steps taken **(`r max$steps` steps)**.
+
+###**Imputing missing values.** 
+  
+Calculate the total number of rows with NAs.
+```{r computenarows}
+RowsWithNA <- nrow(amd[amd$steps == "NA", ])
+```
+
+
+The total number of rows with NAs is **`r RowsWithNA`**.  
+
+NA values are replaced by the mean step number  
+for every specific interval across days.  
+Modifications are stored in a new data frame.
+
+```{r nareplace}
+amdFull <- amd
+for(i in 1:nrow(amdFull)){
+    if(is.na(amdFull[i, 1])){
+    amdFull[i, 1] <- subset(StepsPerInt$steps, StepsPerInt$int == amdFull[i, 3])
+    }
+}
+```
+
+Calculate and store total steps per day with NAs replaced  
+in a new data frame.
+```{r stepsperdaynona}
+  StepsPerDayNoNA <- aggregate(amdFull[c("steps")], list(day = amdFull$date), sum)
+```
+  
+  
+Create histogram of the total number of steps taken per day  
+after replacing NAs.
+```{r histstepsperdaynona}
+ggplot(data = StepsPerDayNoNA, aes(StepsPerDayNoNA$steps)) +
+  geom_histogram(col = "black", fill = "red") +
+  labs(title = "Total Number of Steps taken per Day \n after replacing NAs", x = "Steps", y = "Count") + 
+  theme(panel.border = element_rect(colour = "black", fill = NA))
+```
+  
+    
+Calculate the mean and the median of the total   
+number of steps taken per day after replacing NAs.
+```{r meanmediannona}
+MeanStepsPerDayNoNa <- mean(StepsPerDayNoNA$steps)
+MedianStepsPerDayNoNa <- median(StepsPerDayNoNA$steps)
+```
+The *mean* number of steps taken per day is **`r MeanStepsPerDayNoNa`**.  
+
+The *median* number of steps taken per day is **`r MedianStepsPerDayNoNa`**.  
+
+**Check the new calculated values against the mean and median**  
+**before NA replacement.**
+```{r check}
+meandiff <- MeanStepsPerDayNoNa - MeanStepsPerDay
+mediandiff <- MedianStepsPerDayNoNa - MedianStepsPerDay
+```
+The difference between the two calculated means is **`r meandiff`**.  
+The difference between the two calculated medians is **`r mediandiff`**.  
+  
+We see that the averages have not changed.  
+However, the median has changed as we now have more  
+values for steps across the days.
+
+###**Differences on activity patterns between weekdays and weekends.**
+
+
+```{r createweekdayvar}
+amdFull$date <- as.Date(amdFull$date)
+wkdays <- c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday")
+amdFull$Day <- factor(weekdays(amdFull$date) %in% wkdays, levels = c(FALSE, TRUE), labels = c("Weekend", "Weekday"))
+```
+
+
+Calculate a new data frame with  
+the steps per interval averaged across all days.  
+NAs have been replaced.
+```{r stepsperintervalnona}
+StepsPerIntNoNa <- aggregate(amdFull[c("steps")], list(int = amdFull$interval, Day = amdFull$Day), mean)
+```
+
+Make a two-panel time series plot of the 5-minute interval  
+and the average number of steps taken for weekdays and weekends.
+```{r plotstepsperintervalnonaweekdays}
+ggplot(data = StepsPerIntNoNa, aes(x = int, y = steps)) +
+  geom_line(aes(color = Day)) +
+  facet_grid(Day ~ .) + 
+  labs(title = "Average Number of Steps taken per Interval \n grouped by weekdays and weekends", x = "Interval", y = "Steps") +
+  theme(panel.border = element_rect(colour = "black", fill = NA))
+```
